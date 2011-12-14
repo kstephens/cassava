@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+# -*- ruby -*-
+$: << File.expand_path("../../lib", __FILE__)
+if ARGV[0] == '-D'
+  ARGV.shift
+  $DEBUG = true
+  require 'rubygems'
+  gem 'ruby-debug'
+  require 'ruby-debug'
+end
+require 'cassava/main'
+exit(Cassava::Main.new(ARGV).run!.exit_code)
+
