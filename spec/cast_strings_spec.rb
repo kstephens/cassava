@@ -13,24 +13,24 @@ end
 describe "Cassava::Document" do
   attr_accessor :d
   before do
-    self.d = Cassava::Document.new(:name => 'test', :columns => [ :nil, :string, :integer, :float ])
+    self.d = Cassava::Document.new(:name => 'test', :columns => [ :nil, :string, :fixnum, :float, :integer, :numeric ])
     rows = <<"END".split("\n").map{|r| r.strip.split(/,\s+/).map{|x| x == 'nil' ? nil : x }}
-       nil, nil, nil, nil
-       nil, string, nil, nil
-       nil, +, nil, nil
-       nil, -, nil, nil
-       nil, 234+, nil, nil
-       nil, 1234ws, nil, nil
-       nil, nil, 1234, nil
-       nil, nil, +1234, nil
-       nil, nil, -1234, nil
-       nil, nil, nil, .2
-       nil, nil, nil, -1.2
-       nil, nil, nil, -2.
-       nil, nil, nil, 2e10
-       nil, nil, nil, 1e1
-       nil, nil, nil, 2E-2
-       nil, nil, nil, 3E+3
+       nil, nil, nil, nil, nil, nil
+       nil, string, nil, nil, nil, nil
+       nil, +, nil, nil, nil, nil
+       nil, -, nil, nil, nil, nil
+       nil, 234+, nil, nil, nil, nil
+       nil, 1234ws, nil, nil, nil, nil
+       nil, nil, 1234, nil, nil, nil
+       nil, nil, +1234, nil, nil, nil
+       nil, nil, -1234, nil, nil, nil
+       nil, nil, nil, .2, nil, nil
+       nil, nil, nil, -1.2, nil, nil
+       nil, nil, nil, -2., nil, nil
+       nil, nil, nil, 2e10, nil, nil
+       nil, nil, nil, 1e1, nil, nil
+       nil, nil, nil, 2E-2, nil, nil
+       nil, nil, nil, 3E+3, nil, nil
        nil, nil, nil, nil, 1234, nil
        nil, nil, nil, nil, 12341231234523452345345234, nil
        nil, nil, nil, nil, nil, 1234
@@ -97,7 +97,7 @@ END
       d.column_types[4].should == Integer
     end
     it "should infer Numeric for Fixnum, Bignum, Float" do
-      d.column_types[4].should == Integer
+      d.column_types[5].should == Numeric
     end
   end
 end

@@ -28,6 +28,7 @@ module Cassava
 
     def append_rows! rows
       rows = rows.rows if Document === rows
+      rows.map!{ | r | array_to_row(r) }
       @rows.concat(rows)
       rows.each do | r |
         @ncols = r.size if @ncols < r.size
@@ -121,9 +122,30 @@ module Cassava
       self
     end
 
+    def array_to_row a, columns = nil
+      if Array === a
+        columns ||= self.columns
+        h = { }
+        columns.each_with_index do | c, i |
+          h[c] = a[i]
+        end
+        a = h
+      end
+      a
+    end
+
+    def row_to_array r
+      unless Array === r
+        r = @offset_column.map do | c |
+          c && r[c]
+        end
+      end
+      r
+    end
+
     def cast_strings!
       rows.each do | r |
-        r.map! do | v |
+        r.each do | k, v |
           if String === v
             case v
             when /\A[-+]?\d+\Z/
@@ -132,16 +154,17 @@ module Cassava
               v = v.to_f
             end
           end
-          v
+          r[k] = v
         end
       end
     end
 
     def infer_column_types!
-      column_types = [ nil ] * @ncols
+      column_types = [ nil ] * @columns.size
       ancestors_cache = { }
+      common_ancestor_cache = { }
       rows.each do | r |
-        r.each_with_index do | v, i |
+        r.each_with_index do | (k, v), i |
           next if v.nil?
           ct = column_types[i]
           vt = v.class
@@ -149,9 +172,13 @@ module Cassava
             column_types[i] = vt
             next
           end
-          ca = ancestors_cache[ct] ||= ct.ancestors
-          va = ancestors_cache[vt] ||= vt.ancestors
-          common_ancestor = (ca & va).first || Object
+          common_ancestor =
+            common_ancestor_cache[[ct, vt]] ||=
+            begin
+              ca = ancestors_cache[ct] ||= ct.ancestors
+              va = ancestors_cache[vt] ||= vt.ancestors
+              (ca & va).first || Object
+            end
           # pp [ :v, v, :ct, ct, :vt, vt, :ca, ca, :va, va, :common_ancestor, common_ancestor ]; $stdin.readline
           # if Value's class is not a specialization of column class.
           ct = common_ancestor
@@ -165,6 +192,53 @@ module Cassava
         infer_column_types!
       end
       @column_types
+    end
+
+    # Format as ASCII table.
+    def to_text opts = { }
+      gem 'terminal-table'
+      require 'terminal-table'
+
+      table = Terminal::Table.new() do | t |
+        # t.title = self.name
+        s = t.style
+        s.border_x = s.border_y = s.border_i = ''
+        s.padding_left = 0
+        s.padding_right = 1
+      end
+
+      # Align numeric columns to the left.
+      self.column_types.each_with_index do | t, ci |
+        puts "  column #{ci} #{columns[ci]} #{t}"
+        if t.ancestors.include?(Numeric)
+          table.align_column(ci, :right)
+        end
+      end
+
+      table << self.columns
+
+      # Convert rows to Arrays and handle nil, etc.
+      self.rows.each do | r |
+        r = self.row_to_array(r)
+        r.map! do | c |
+          c = case c
+          when nil
+            ''
+          when Integer
+            thousands(c)
+          else
+            c
+          end
+        end
+        table << r
+      end
+
+      # Return formatted table.
+      table.to_s
+    end
+
+    def thousands x, sep = '_'
+      x && x.to_s.reverse!.gsub(/(\d{3})/, "\\1#{sep}").reverse!.sub(/^(\D|\A)#{sep}/, '')
     end
   end
 end
