@@ -1,10 +1,11 @@
+require 'rubygems'
 require 'cassava/document'
-
+$DEBUG = true
 module Cassava
   class Main
     attr_accessor :progname
     attr_accessor :args, :cmd, :opts, :exit_code
-    attr_accessor :result
+    attr_accessor :result, :output
 
     def initialize args = nil
       @progname = File.basename($0)
@@ -12,20 +13,51 @@ module Cassava
       @opts = { }
       @exit_code = 0
       @output = "/dev/stdout"
+      @debug = true
     end
 
     def run!
-      @cmd = @args.shift
-      sel = :"_#{cmd}!"
-    raise ArgumentError, "Invalid command: #{cmd.inspect}" unless respond_to?(sel)
-      send(sel)
+      cmds = [ ]
+      first_arg = nil
+
+      cmd = [ ]
+      args = @args.dup
+      while arg = args.shift
+        if arg == '-'
+          first_arg = '--result'
+          cmds << cmd
+          cmd = [ ]
+        else
+          cmd << arg
+          if first_arg
+            cmd << first_arg
+            first_arg = nil
+          end
+        end
+      end
+      cmds << cmd
+      # pp cmds
+
+      # Run each command:
+      cmds.each do | cmd |
+        @args = cmd.dup
+        next_cmd!
+      end
+
       result.emit!(@output) if result
       self
     rescue ::Exception => exc
       $stderr.puts "#{progname}: ERROR: #{exc.inspect}"
-      $stderr.puts "  #{exc.backtrace * "\n  "}" if $DEBUG
+      $stderr.puts "  #{exc.backtrace * "\n  "}" if @debug || $DEBUG
       @exit_code = 1
       self
+    end
+
+    def next_cmd!
+      @cmd = @args.shift
+      sel = :"_#{cmd}!"
+      raise ArgumentError, "Invalid command: #{cmd.inspect}" unless respond_to?(sel)
+      send(sel)
     end
 
     def next_document!
@@ -33,6 +65,9 @@ module Cassava
       opts = { }
       until args.empty?
         case arg = args.shift
+        when '--result'
+          doc = @result
+          break
         when '-o'
           self.output = args.shift
         when '-FS'
@@ -55,8 +90,7 @@ module Cassava
       @result = next_document!
       until args.empty?
         other = next_document!
-        other.columns.each { | c | result.add_column!(c) }
-        result.rows.append(other.rows)
+        result.append_rows!(other)
       end
     end
 
@@ -99,6 +133,16 @@ module Cassava
         end
         @result = new_result
       end
+    end
+
+    def _format!
+      @result = next_document!
+      rows = @result.to_text
+      $stderr.puts rows
+      rows = rows.split("\n").map{|r| { :_ => r}}
+      require 'pp'; rows
+      @result = Cassava::Document.new(:name => "#{@result.name}->format", :columns => [ :_ ], :rows => rows)
+      @result
     end
   end
 end
