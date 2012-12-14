@@ -11,6 +11,7 @@ module Cassava
       @args = (args || ARGV).dup
       @opts = { }
       @exit_code = 0
+      @output = "/dev/stdout"
     end
 
     def run!
@@ -18,7 +19,7 @@ module Cassava
       sel = :"_#{cmd}!"
     raise ArgumentError, "Invalid command: #{cmd.inspect}" unless respond_to?(sel)
       send(sel)
-      result.emit!("/dev/stdout") if result
+      result.emit!(@output) if result
       self
     rescue ::Exception => exc
       $stderr.puts "#{progname}: ERROR: #{exc.inspect}"
@@ -32,6 +33,8 @@ module Cassava
       opts = { }
       until args.empty?
         case arg = args.shift
+        when '-o'
+          self.output = args.shift
         when '-FS'
           opts[:col_sep] = args.shift
         when '-IGNORE'
@@ -42,7 +45,7 @@ module Cassava
           opts[:name] = arg
           doc = Document.new(opts)
           doc.parse!
-          breakg
+          break
         end
       end
       doc

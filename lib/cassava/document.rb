@@ -120,6 +120,52 @@ module Cassava
       end
       self
     end
+
+    def cast_strings!
+      rows.each do | r |
+        r.map! do | v |
+          if String === v
+            case v
+            when /\A[-+]?\d+\Z/
+              v = v.to_i
+            when /\A[-+]?[0-9.]+(e[+-]?\d+)?\Z/i
+              v = v.to_f
+            end
+          end
+          v
+        end
+      end
+    end
+
+    def infer_column_types!
+      column_types = [ nil ] * @ncols
+      ancestors_cache = { }
+      rows.each do | r |
+        r.each_with_index do | v, i |
+          next if v.nil?
+          ct = column_types[i]
+          vt = v.class
+          if ct.nil?
+            column_types[i] = vt
+            next
+          end
+          ca = ancestors_cache[ct] ||= ct.ancestors
+          va = ancestors_cache[vt] ||= vt.ancestors
+          common_ancestor = (ca & va).first || Object
+          # pp [ :v, v, :ct, ct, :vt, vt, :ca, ca, :va, va, :common_ancestor, common_ancestor ]; $stdin.readline
+          # if Value's class is not a specialization of column class.
+          ct = common_ancestor
+          column_types[i] = ct
+        end
+      end
+      @column_types = column_types
+    end
+    def column_types
+      unless @column_types
+        infer_column_types!
+      end
+      @column_types
+    end
   end
 end
 
