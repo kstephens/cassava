@@ -27,13 +27,20 @@ module Cassava
     end
 
     def append_rows! rows
-      rows = rows.rows if Document === rows
+      if Document === rows
+        rows.columns.each { | c | add_column!(c) }
+        rows = rows.rows
+      end
       rows.map!{ | r | array_to_row(r) }
+      row_i = @rows.size
       @rows.concat(rows)
       rows.each do | r |
         @ncols = r.size if @ncols < r.size
+        r[:_row_i] = row_i
+        row_i += 1
       end
       @index.clear
+      @column_types = nil
       self
     end
 
@@ -53,17 +60,8 @@ module Cassava
       end
 
       @columns = @rows.shift unless @columns
-      @ncols = @columns.size
-      i = -1
-      @columns.map! do | c |
-        i += 1
-        c = c.to_s
-        next if c.empty?
-        c = c.to_sym
-        @column_offset[c] = i
-        @offset_column[i] = c
-        c
-      end
+      update_columns!
+
       row_i = 0
       @rows.map! do | r |
         @ncols = r.size if @ncols < r.size
@@ -81,14 +79,27 @@ module Cassava
 
     def add_column! c
       c = c.to_sym
-      unless i = @offset_column[c]
-        i = @ncols
-        @ncols += 1
+      unless i = @column_offset[c]
         @columns << c
-        @offset_column[c] = i
-        @column_offset[i] = c
+        update_columns!
       end
       i
+    end
+
+    def update_columns!
+      @ncols = @columns.size
+      i = -1
+      @columns.map! do | c |
+        i += 1
+        c = c.to_s
+        next if c.empty?
+        c = c.to_sym
+        @column_offset[c] = i
+        @offset_column[i] = c
+        c
+      end
+      @column_types = nil
+      self
     end
 
     def index! c
@@ -143,28 +154,40 @@ module Cassava
       r
     end
 
-    def cast_strings!
+    def cast_strings rows
       rows.each do | r |
         r.each do | k, v |
+          next if v.nil?
+          old_v = v
+          v = v.to_s
           if String === v
             case v
             when /\A[-+]?\d+\Z/
               v = v.to_i
-            when /\A[-+]?[0-9.]+(e[+-]?\d+)?\Z/i
+            when /\A[-+]?([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+\.)(e[-+]?\d+)?\Z/i
               v = v.to_f
             end
+            # puts "old_v = #{old_v.inspect} => #{v.inspect}"
           end
           r[k] = v
         end
       end
+      rows
+    end
+    def cast_strings!
+      cast_strings @rows
+      self
     end
 
-    def infer_column_types!
+    require 'pp'
+    def infer_column_types rows = self.rows
       column_types = [ nil ] * @columns.size
       ancestors_cache = { }
       common_ancestor_cache = { }
       rows.each do | r |
-        r.each_with_index do | (k, v), i |
+        raise unless Hash === r
+        @columns.each_with_index do | k, i |
+          v = r[k]
           next if v.nil?
           ct = column_types[i]
           vt = v.class
@@ -175,23 +198,33 @@ module Cassava
           common_ancestor =
             common_ancestor_cache[[ct, vt]] ||=
             begin
-              ca = ancestors_cache[ct] ||= ct.ancestors
-              va = ancestors_cache[vt] ||= vt.ancestors
+              ca =
+                ancestors_cache[ct] ||=
+                ct.ancestors # .delete_if{|x| x == CSV::Cell || x.class == Module}
+              va =
+                ancestors_cache[vt] ||=
+                vt.ancestors # .delete_if{|x| x == CSV::Cell || x.class == Module}
               (ca & va).first || Object
             end
-          # pp [ :v, v, :ct, ct, :vt, vt, :ca, ca, :va, va, :common_ancestor, common_ancestor ]; $stdin.readline
+          # pp [ :k, k, :v, v, :ct, ct, :vt, vt, :ca, ca, :va, va, :common_ancestor, common_ancestor ]; $stdin.readline
           # if Value's class is not a specialization of column class.
           ct = common_ancestor
           column_types[i] = ct
         end
       end
-      @column_types = column_types
+      # pp columns.zip(column_types)
+      column_types
     end
+
     def column_types
       unless @column_types
-        infer_column_types!
+        @column_types ||= infer_column_types
       end
       @column_types
+    end
+
+    def clone_rows rows = self.rows
+      rows.map { | r | r.dup }
     end
 
     # Format as ASCII table.
@@ -199,39 +232,43 @@ module Cassava
       gem 'terminal-table'
       require 'terminal-table'
 
-      table = Terminal::Table.new() do | t |
+      table = Terminal::Table.new() do | table |
         # t.title = self.name
-        s = t.style
+        s = table.style
         s.border_x = s.border_y = s.border_i = ''
+        # s.border_i = '|'
         s.padding_left = 0
         s.padding_right = 1
-      end
 
-      # Align numeric columns to the left.
-      self.column_types.each_with_index do | t, ci |
-        puts "  column #{ci} #{columns[ci]} #{t}"
-        if t.ancestors.include?(Numeric)
-          table.align_column(ci, :right)
+        table << self.columns.map{|c| { :value => c.to_s, :alignment => :center }}
+
+        # Convert rows to Arrays and handle nil, etc.
+        self.rows.each do | r |
+          r = self.row_to_array(r)
+          r.map! do | c |
+            c = case c
+                when nil
+                  ''
+                when Integer
+                  thousands(c)
+                else
+                  c
+                end
+            # c = "#{c} |"
+          end
+          table << r
         end
-      end
 
-      table << self.columns
-
-      # Convert rows to Arrays and handle nil, etc.
-      self.rows.each do | r |
-        r = self.row_to_array(r)
-        r.map! do | c |
-          c = case c
-          when nil
-            ''
-          when Integer
-            thousands(c)
-          else
-            c
+        # Align numeric columns to the left.
+        column_types = infer_column_types(cast_strings(clone_rows))
+        column_types.each_with_index do | type, ci |
+          if type && type.ancestors.include?(Numeric)
+            # puts "  column #{ci} #{columns[ci]} #{t}"
+            table.align_column(ci, :right)
           end
         end
-        table << r
       end
+
 
       # Return formatted table.
       table.to_s
