@@ -70,10 +70,14 @@ module Cassava
       opts = { }
       until args.empty?
         case arg = args.shift
-        when '-kv'
+        when '-cv'
           k = args.shift.to_sym
           v = args.shift
-          @key_vals[k] = v
+          @select[k] = v
+        when /\A([^=]+)=(.*)\Z/
+          k = $1.to_sym
+          v = $2
+          @select[k] = v
         when '--result'
           doc = @result
           break
@@ -106,18 +110,19 @@ module Cassava
     end
 
     def _select!
-      @key_vals = { }
+      @select = { }
       @result = next_document!
       @result.coerce_to_strings!
-      @key_vals.each do | col, val |
+      @select.each do | col, val |
         new_result = @result.dup
         new_result.empty_rows!
         found_rows = result.get(col, val)
-        puts "  #{col}=#{val} => #{found_rows.size} rows"
+        # puts "  #{col}=#{val} => #{found_rows.size} rows"
         new_result.append_rows!(found_rows)
         @result = new_result
       end
     end
+    alias :_where! :_select!
 
     def _join!
       @result = next_document!
