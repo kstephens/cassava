@@ -13,7 +13,7 @@ module Cassava
       @offset_column = [ ]
       @ncols = 0
       @rows = [ ]
-      @index = [ ]
+      @index = { }
     end
 
     def nrows
@@ -23,10 +23,12 @@ module Cassava
     def empty_rows!
       @rows = [ ]
       @index.clear
+      @column_types = nil
       self
     end
 
     def append_rows! rows
+      return self unless rows
       if Document === rows
         rows.columns.each { | c | add_column!(c) }
         rows = rows.rows
@@ -103,12 +105,14 @@ module Cassava
     end
 
     def index! c
-      c = @column_offset[c] if Symbol === c
-      unless ind = @index[c] ||= { }
-        ind = @index[c] = { }
+      c = @column[c] if Integer === c
+      unless ind = @index[c]
+        ind = { }
         @rows.each do | r |
           (ind[r[c]] ||= [ ]) << r
         end
+        # pp [ :index!, c, ind.size ]
+        @index[c] = ind
       end
       ind
     end
@@ -152,6 +156,15 @@ module Cassava
         end
       end
       r
+    end
+
+    def coerce_to_strings!
+      rows.each do | r |
+        r.each do | k, v |
+          r[k] = v.to_s unless String === v
+        end
+      end
+      self
     end
 
     def cast_strings rows
