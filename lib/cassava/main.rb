@@ -41,7 +41,7 @@ module Cassava
         last_arg = nil
       end
       cmds << cmd
-      pp cmds
+      # pp cmds
 
       # Run each command:
       cmds.each do | cmd |

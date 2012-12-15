@@ -121,8 +121,34 @@ module Cassava
       index!(c)[v]
     end
 
-    def emit! document
-      CSV.open(document, "wb") do | out |
+    def emit! file
+      out = nil
+      case file
+      when '/dev/stdout', '/dev/fd/0'
+        tmp_file = true
+        out = $stdout
+      when %r{^/dev/}
+        tmp_file = true
+      end
+      if tmp_file
+        tmp_file = "/tmp/cassava-#{$$}.csv"
+        $stderr.puts "  #{file} => #{tmp_file}"
+        file = tmp_file
+      end
+
+      _emit! file
+
+      if tmp_file
+        out ||= File.open(tmp, "w")
+        $stderr.puts "  #{tmp_file} => #{out}"
+        out.write(File.read(tmp_file))
+      end
+    ensure
+      File.unlink(tmp_file) if tmp_file
+    end
+
+    def _emit! file
+      CSV.open(file, "wb") do | out |
         a = @offset_column.map do | c |
           c && c.to_s
         end
