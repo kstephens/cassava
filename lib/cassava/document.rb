@@ -4,6 +4,7 @@ module Cassava
   class Document
     attr_accessor :name, :columns, :column_offset, :offset_column
     attr_accessor :rows
+    attr_accessor :debug
 
     def initialize opts = nil
       @opts = opts
@@ -142,7 +143,6 @@ module Cassava
         @rows.each do | r |
           (ind[r[c]] ||= [ ]) << r
         end
-        # pp [ :index!, c, ind.size ]
         @index[c] = ind
       end
       ind
@@ -235,7 +235,7 @@ module Cassava
             case v
             when /\A[-+]?\d+\Z/
               v = v.to_i
-            when /\A[-+]?([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+\.)(e[-+]?\d+)?\Z/i
+            when /\A([-+]?([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+\.)(e[-+]?\d+)?|[-+]?\d+e[-+]?\d+)\Z/i
               v = v.to_f
             end
             # puts "old_v = #{old_v.inspect} => #{v.inspect}"
@@ -245,6 +245,7 @@ module Cassava
       end
       rows
     end
+
     def cast_strings!
       cast_strings @rows
       @column_types = nil
@@ -259,7 +260,6 @@ module Cassava
       columns.each_with_index do | c, i |
         ct[c] = column_types[i]
       end
-      pp [ by, ct ]
       @rows.sort! do | a, b |
         r = 0
         by.each do | c |
@@ -303,13 +303,15 @@ module Cassava
             begin
               ca =
                 ancestors_cache[ct] ||=
-                ct.ancestors # .delete_if{|x| x == CSV::Cell || x.class == Module}
+                ct.ancestors.delete_if{|x| x.class == Module}
               va =
                 ancestors_cache[vt] ||=
-                vt.ancestors # .delete_if{|x| x == CSV::Cell || x.class == Module}
+                vt.ancestors.delete_if{|x| x.class == Module}
               (ca & va).first || Object
             end
-          # pp [ :k, k, :v, v, :ct, ct, :vt, vt, :ca, ca, :va, va, :common_ancestor, common_ancestor ]; $stdin.readline
+          if @debug && k == :float
+            pp [ :k, k, :v, v, :ct, ct, :vt, vt, :ca, ca, :va, va, :common_ancestor, common_ancestor ]
+          end
           # if Value's class is not a specialization of column class.
           ct = common_ancestor
           column_types[i] = ct
