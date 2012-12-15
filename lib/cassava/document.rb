@@ -132,7 +132,7 @@ module Cassava
       end
       if tmp_file
         tmp_file = "/tmp/cassava-#{$$}.csv"
-        $stderr.puts "  #{file} => #{tmp_file}"
+        # $stderr.puts "  #{file} => #{tmp_file}"
         file = tmp_file
       end
 
@@ -140,7 +140,7 @@ module Cassava
 
       if tmp_file
         out ||= File.open(tmp, "w")
-        $stderr.puts "  #{tmp_file} => #{out}"
+        # $stderr.puts "  #{tmp_file} => #{out}"
         out.write(File.read(tmp_file))
       end
     ensure
@@ -162,6 +162,7 @@ module Cassava
       end
       self
     end
+    alias :emit! :_emit!
 
     def array_to_row a, columns = nil
       if Array === a
