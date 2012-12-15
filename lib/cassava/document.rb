@@ -8,12 +8,68 @@ module Cassava
     def initialize opts = nil
       @opts = opts
       @name = opts[:name] or raise ArgumentError, "name not specified"
-      @columns = opts[:columns]
-      @column_offset = { }
-      @offset_column = [ ]
-      @ncols = 0
       @rows = [ ]
       @index = { }
+      self.columns = opts[:columns] || [ ]
+      if x = opts[:rows]
+        append_row! x
+      end
+    end
+
+    def columns= x
+      @columns = x
+      update_columns!
+    end
+
+    def update_columns!
+      @ncols = @columns.size
+      @column_offset = { }
+      @offset_column = [ ]
+      i = -1
+      @columns.map! do | c |
+        i += 1
+        c = c.to_s
+        next if c.empty?
+        c = c.to_sym
+        @column_offset[c] = i
+        @offset_column[i] = c
+        c
+      end
+      @column_types = nil
+      @index.keep_if { | c, h | @column_offset[c] }
+      self
+    end
+
+    def add_column! c
+      c = c.to_sym
+      unless i = @column_offset[c]
+        i = @columns.size
+        @columns << c
+        update_columns!
+      end
+      i
+    end
+
+    def to_column_names! a
+      a.map! do | x |
+        case x
+        when Integer
+          c = @columns[x]
+        when String
+          if x == (i = x.to_i).to_s
+            c = @columns[i]
+          else
+            c = x.to_sym
+          end
+        when Symbol
+          c = x
+        else
+          raise TypeError, "#{x.inspect}"
+        end
+        raise TypeError, "#{x.inspect} => #{c.inspect}" unless c
+        c
+      end
+      a
     end
 
     def nrows
@@ -61,7 +117,7 @@ module Cassava
         @rows = csv.read
       end
 
-      @columns = @rows.shift unless @columns
+      @columns = @rows.shift if @columns.empty?
       update_columns!
 
       row_i = 0
@@ -77,31 +133,6 @@ module Cassava
       self
     ensure
       csv.close if csv
-    end
-
-    def add_column! c
-      c = c.to_sym
-      unless i = @column_offset[c]
-        @columns << c
-        update_columns!
-      end
-      i
-    end
-
-    def update_columns!
-      @ncols = @columns.size
-      i = -1
-      @columns.map! do | c |
-        i += 1
-        c = c.to_s
-        next if c.empty?
-        c = c.to_sym
-        @column_offset[c] = i
-        @offset_column[i] = c
-        c
-      end
-      @column_types = nil
-      self
     end
 
     def index! c

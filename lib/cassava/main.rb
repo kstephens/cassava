@@ -1,12 +1,12 @@
-require 'rubygems'
+require 'cassava'
 require 'cassava/document'
-$DEBUG = true
+
 module Cassava
   class Main
     attr_accessor :progname
     attr_accessor :args, :cmd, :opts, :exit_code
     attr_accessor :result, :output
-    attr_accessor :by
+    attr_accessor :by, :columns
 
     def initialize args = nil
       @progname = File.basename($0)
@@ -15,6 +15,7 @@ module Cassava
       @exit_code = 0
       @output = "/dev/stdout"
       @debug = true
+      @select_where = { }
     end
 
     def run!
@@ -73,14 +74,16 @@ module Cassava
         when '-cv'
           k = args.shift.to_sym
           v = args.shift
-          @select[k] = v
+          @select_where[k] = v
         when /\A([^=]+)=(.*)\Z/
           k = $1.to_sym
           v = $2
-          @select[k] = v
+          @select_where[k] = v
         when '--result'
           doc = @result
           break
+        when '-c'
+          self.columns = args.shift.split(/\s*,\s*|\s+/)
         when '-by'
           self.by = args.shift.split(/\s*,\s*|\s+/)
         when '-o'
@@ -101,31 +104,57 @@ module Cassava
       doc
     end
 
+    def self.define_command name, doc, &blk
+      meth = :"_#{name}!"
+      define_method meth, &blk
+      @@commands << { :name => name, :doc => doc }
+    end
+
     def _cat!
-      @result = next_document!
+      self.result = next_document!
       until args.empty?
         other = next_document!
         result.append_rows!(other)
       end
     end
 
-    def _select!
-      @select = { }
-      @result = next_document!
-      @result.coerce_to_strings!
-      @select.each do | col, val |
-        new_result = @result.dup
+    def _where!
+      @select_where = { }
+      self.result = next_document!
+      result.coerce_to_strings!
+      @select_where.each do | col, val |
+        new_result = result.dup
         new_result.empty_rows!
         found_rows = result.get(col, val)
         # puts "  #{col}=#{val} => #{found_rows.size} rows"
         new_result.append_rows!(found_rows)
-        @result = new_result
+        self.result = new_result
       end
     end
-    alias :_where! :_select!
+    alias :_select! :_where!
+
+    def _cut!
+      self.columns = nil
+      self.result = next_document!
+      self.columns ||= [ result.columns[0] ]
+      # pp result.columns
+      result.to_column_names! columns
+      new_result = result.dup.empty_rows!
+      new_result.columns = columns & result.columns
+      # pp new_result.columns
+      # pp new_result.column_offset
+      rows = self.result.rows.map do | r |
+        r = r.dup
+        r.keep_if { | c | new_result.column_offset[c] }
+        # pp r
+        r
+      end
+      new_result.append_rows! rows
+      self.result = new_result
+    end
 
     def _join!
-      @result = next_document!
+      self.result = next_document!
       until args.empty?
         left_key = args.shift.to_sym
         right_key = args.shift.to_sym
@@ -135,7 +164,7 @@ module Cassava
           new_result.add_column!(c)
         end
         right.columns.each do | c |
-          new_result.add_columns!(c)
+          new_result.add_column!(c)
         end
         result.rows.each do | lr |
           rrows = right.get(right_key, lr[left_key])
@@ -147,25 +176,24 @@ module Cassava
             new_result.rows << r
           end
         end
-        @result = new_result
+        self.result = new_result
       end
     end
 
     def _sort!
-      @result = next_document!
+      self.by = nil
+      self.result = next_document!
       by = self.by || args
       by.map! { | c | c.to_sym }
-      @result.sort!(by)
-      @result
+      result.sort!(by)
     end
 
     def _format!
-      rows = @result.to_text
-      $stderr.puts rows
-      rows = rows.split("\n").map{|r| { :_ => r}}
-      require 'pp'; rows
-      @result = Cassava::Document.new(:name => "#{@result.name}->format", :columns => [ :_ ], :rows => rows)
-      @result
+      rows = result.to_text
+      # $stderr.puts rows
+      rows = rows.split("\n").map { | r | { :_ => r } }
+      # require 'pp'; pp rows
+      self.result = Cassava::Document.new(:name => "#{@result.name}->format", :columns => [ :_ ], :rows => rows)
     end
   end
 end
