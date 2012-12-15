@@ -18,4 +18,7 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
 
   gem.add_dependency 'terminal-table', '~> 1.4.5'
+
+  gem.add_development_dependency "rake", "~> 10.0.2"
+  gem.add_development_dependency "rspec", "~> 2.12.0"
 end
