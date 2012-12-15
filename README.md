@@ -1,6 +1,6 @@
 # Cassava
 
-TODO: Write a gem description
+A command-line CSV tool.
 
 ## Installation
 
@@ -18,7 +18,20 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+    # Concat mulitple CSVs, while merging columns:
+    $ cassava cat first.csv second.csv
+    
+    # Cut columns out of result; '-' is used to pipe results to next command:
+    $ cassava cat first.csv second.csv - cut -c first_name,last_name
+    
+    # Format as ASCII table.
+    $ cassava format first.csv
+    
+    # Select where.
+    $ cassava cat *.csv - where last_name=Smith - format
+    
+    # Sort by a column:
+    $ cassava cat *.csv - sort -by last_name,first_name - format
 
 ## Contributing
 
