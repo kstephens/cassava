@@ -176,6 +176,30 @@ module Cassava
     end
     def cast_strings!
       cast_strings @rows
+      @column_types = nil
+      self
+    end
+
+    def sort! by = nil
+      by ||= @columns
+      cast_strings!
+      # by = by.map { | x | column_offset[x] }
+      ct = { }
+      columns.each_with_index do | c, i |
+        ct[c] = column_types[i]
+      end
+      pp by
+      @rows.sort! do | a, b |
+        r = 0
+        by.each do | c |
+          av = a[c]
+          bv = b[c]
+          next if av.nil? || bv.nil?
+          r = av <=> bv rescue 0
+          break if r != 0
+        end
+        r
+      end
       self
     end
 

@@ -6,6 +6,7 @@ module Cassava
     attr_accessor :progname
     attr_accessor :args, :cmd, :opts, :exit_code
     attr_accessor :result, :output
+    attr_accessor :by
 
     def initialize args = nil
       @progname = File.basename($0)
@@ -68,6 +69,8 @@ module Cassava
         when '--result'
           doc = @result
           break
+        when '-by'
+          self.by = args.shift.split(/\s*,\s*|\s+/)
         when '-o'
           self.output = args.shift
         when '-FS'
@@ -135,8 +138,15 @@ module Cassava
       end
     end
 
-    def _format!
+    def _sort!
       @result = next_document!
+      by = self.by || args
+      by.map! { | c | c.to_sym }
+      @result.sort!(by)
+      @result
+    end
+
+    def _format!
       rows = @result.to_text
       $stderr.puts rows
       rows = rows.split("\n").map{|r| { :_ => r}}
