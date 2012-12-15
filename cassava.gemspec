@@ -7,10 +7,10 @@ Gem::Specification.new do |gem|
   gem.name          = "cassava"
   gem.version       = Cassava::VERSION
   gem.authors       = ["Kurt Stephens"]
-  gem.email         = ["kurt@enova.com"]
-  gem.description   = %q{TODO: Write a gem description}
-  gem.summary       = %q{TODO: Write a gem summary}
-  gem.homepage      = ""
+  gem.email         = ["ks.github@kurtstephens.com"]
+  gem.description   = %q{A command-line CSV tool.}
+  gem.summary       = %q{A command-line CSV tool.}
+  gem.homepage      = "https://github.com/kstephens/cassava"
 
   gem.files         = `git ls-files`.split($/)
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
