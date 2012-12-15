@@ -188,14 +188,22 @@ module Cassava
       columns.each_with_index do | c, i |
         ct[c] = column_types[i]
       end
-      pp by
+      pp [ by, ct ]
       @rows.sort! do | a, b |
         r = 0
         by.each do | c |
           av = a[c]
           bv = b[c]
-          next if av.nil? || bv.nil?
-          r = av <=> bv rescue 0
+          case
+          when av.nil? && bv.nil?
+            r = 0
+          when av.nil?
+            r = -1
+          when bv.nil?
+            r = 1
+          else
+            r = (av <=> bv rescue nil) || 0
+          end
           break if r != 0
         end
         r
