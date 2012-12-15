@@ -19,25 +19,29 @@ module Cassava
 
     def run!
       cmds = [ ]
-      first_arg = nil
+      last_arg = nil
 
       cmd = [ ]
       args = @args.dup
       while arg = args.shift
         if arg == '-'
-          first_arg = '--result'
+          if last_arg
+            cmd << last_arg
+            last_arg = nil
+          end
+          last_arg = '--result'
           cmds << cmd
           cmd = [ ]
         else
           cmd << arg
-          if first_arg
-            cmd << first_arg
-            first_arg = nil
-          end
         end
       end
+      if last_arg
+        cmd << last_arg
+        last_arg = nil
+      end
       cmds << cmd
-      # pp cmds
+      pp cmds
 
       # Run each command:
       cmds.each do | cmd |
